@@ -1,0 +1,90 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?   // Added password field for authentication
+  image         String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  analyses      Analysis[]
+  notes         Note[]
+  texts         Text[]
+
+  @@map("users")
+}
+
+model Text {
+  id          String   @id @default(cuid())
+  title       String
+  author      String?
+  language    Language
+  content     String
+  perseusId   String?  @unique // Perseus Digital Library ID
+  isFragment  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  analyses    Analysis[]
+  notes       Note[]
+  userId      String?  // Optional: if user has saved this text
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("texts")
+}
+
+model Analysis {
+  id              String   @id @default(cuid())
+  textId          String
+  word            String
+  morphological   Json     // Store morphological analysis as JSON
+  definitions     String[] // Array of English definitions
+  perseusLink     String?  // Link to Perseus lexicon
+  ithacaRestoration String? // Ithaca model restoration suggestion
+  ithacaGeography String?  // Ithaca model geographical attribution
+  ithacaDate      String?  // Ithaca model chronological dating
+  createdAt       DateTime @default(now())
+
+  // Relations
+  text            Text     @relation(fields: [textId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("analyses")
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  content   String
+  word      String?
+  textId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      Text?    @relation(fields: [textId], references: [id], onDelete: SetNull)
+
+  @@map("notes")
+}
+
+enum Language {
+  LATIN
+  GREEK
+}
