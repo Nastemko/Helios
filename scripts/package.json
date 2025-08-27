@@ -1,0 +1,28 @@
+{
+  "name": "helios-text-extraction",
+  "version": "1.0.0",
+  "description": "Scripts for extracting Greek and Latin texts for the Helios project",
+  "main": "extract-greek-texts.js",
+  "scripts": {
+    "extract": "node extract-greek-texts.js",
+    "import": "node import-to-database.js",
+    "setup-db": "node setup-database.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.8.10",
+    "@prisma/client": "^5.7.1"
+  },
+  "keywords": [
+    "greek",
+    "latin",
+    "classics",
+    "text-extraction",
+    "xml",
+    "perseus",
+    "prisma",
+    "database"
+  ],
+  "author": "Helios Project",
+  "license": "MIT"
+}

@@ -1,0 +1,256 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Author model - represents classical authors
+model Author {
+  id          String   @id @default(cuid())
+  tlgId       String   @unique // Thesaurus Linguae Graecae ID (e.g., "tlg0001")
+  name        String
+  fullName    String?
+  birthDate   String?  // Approximate birth date (e.g., "c. 480 BCE")
+  deathDate   String?  // Approximate death date (e.g., "c. 406 BCE")
+  period      String?  // Historical period (e.g., "Classical", "Hellenistic")
+  genre       String?  // Primary genre (e.g., "Tragedy", "Philosophy", "History")
+  nationality String?  // Nationality/region (e.g., "Athenian", "Sicilian")
+  biography   String?  // Brief biographical information
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  works Work[]
+
+  @@map("authors")
+}
+
+// Work model - represents individual literary works
+model Work {
+  id          String   @id @default(cuid())
+  tlgId       String   // Work ID within author's corpus (e.g., "tlg001")
+  title       String
+  originalTitle String? // Title in original language
+  authorId    String
+  genre       String?  // Genre of this specific work
+  period      String?  // When this work was written
+  language    String   // Primary language (e.g., "grc", "lat")
+  isComplete  Boolean  @default(false) // Whether the work is complete or fragmentary
+  lineCount   Int      // Total number of lines/text units
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  author      Author   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  texts      Text[]
+  translations Translation[]
+  searchIndices SearchIndex[]
+  collectionWorks CollectionWork[]
+  vocabularyEntries VocabularyEntry[]
+
+  @@unique([authorId, tlgId])
+  @@map("works")
+}
+
+// Text model - represents the actual text content
+model Text {
+  id          String   @id @default(cuid())
+  workId      String
+  language    String   // Language of this text (e.g., "grc", "lat")
+  contentType String   // Type of content (e.g., "line", "paragraph", "chapter")
+  lineNumber  String?  // Line number or reference (e.g., "1", "1.1", "Book 1")
+  content     String   @db.Text // The actual text content
+  metadata    Json?    // Additional metadata (e.g., manuscript info, editorial notes)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  work        Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+  searchIndices SearchIndex[]
+
+  @@unique([workId, language, lineNumber])
+  @@map("texts")
+}
+
+// Translation model - represents translations of works
+model Translation {
+  id          String   @id @default(cuid())
+  workId      String
+  language    String   // Target language (e.g., "eng", "fre", "ger")
+  translator  String?  // Name of translator
+  translationDate String? // When this translation was made
+  edition     String?  // Edition information
+  publisher   String?  // Publisher information
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  work        Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@unique([workId, language])
+  @@map("translations")
+}
+
+// Collection model - for organizing works into thematic collections
+model Collection {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  type        String   // Type of collection (e.g., "genre", "period", "theme")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  works       CollectionWork[]
+
+  @@map("collections")
+}
+
+// Junction table for collections and works
+model CollectionWork {
+  id           String @id @default(cuid())
+  collectionId String
+  workId       String
+  order        Int?   // Order within the collection
+  createdAt    DateTime @default(now())
+
+  // Relations
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  work         Work       @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, workId])
+  @@map("collection_works")
+}
+
+// Search index for full-text search
+model SearchIndex {
+  id          String   @id @default(cuid())
+  workId      String
+  textId      String?
+  content     String   @db.Text // Searchable content
+  language    String   // Language of the content
+  searchVector Unsupported("tsvector")? // PostgreSQL full-text search vector
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  work        Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+  text        Text?    @relation(fields: [textId], references: [id], onDelete: Cascade)
+
+  @@map("search_index")
+}
+
+// User model for authentication and personal data
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  vocabularyEntries VocabularyEntry[]
+  flashcards       Flashcard[]
+  studySessions    StudySession[]
+  quizAttempts     QuizAttempt[]
+
+  @@map("users")
+}
+
+// Vocabulary entry - tracks words a user has looked up
+model VocabularyEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  word        String   // The Greek/Latin word
+  language    String   // "grc" or "lat"
+  lemma       String   // Dictionary form
+  partOfSpeech String? // Part of speech
+  definitions String[] // Array of English definitions
+  context     String?  // Context where the word was found
+  workId      String?  // Reference to the work where word was found
+  lineNumber  String?  // Specific line reference
+  lookupCount Int      @default(1) // How many times user looked up this word
+  lastLookedUp DateTime @default(now())
+  difficulty  String?  // User-assigned difficulty (easy, medium, hard)
+  notes       String?  // User's personal notes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  work        Work?    @relation(fields: [workId], references: [id], onDelete: SetNull)
+  flashcards  Flashcard[]
+
+  @@unique([userId, word, language])
+  @@map("vocabulary_entries")
+}
+
+// Flashcard model for vocabulary study
+model Flashcard {
+  id                String   @id @default(cuid())
+  userId            String
+  vocabularyEntryId String
+  front             String   // Greek/Latin word
+  back              String   // English definition(s)
+  lastReviewed      DateTime @default(now())
+  nextReview        DateTime @default(now()) // Spaced repetition scheduling
+  reviewCount       Int      @default(0)
+  difficulty        Int      @default(3) // 1-5 scale, 1=easiest, 5=hardest
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vocabularyEntry   VocabularyEntry  @relation(fields: [vocabularyEntryId], references: [id], onDelete: Cascade)
+
+  @@map("flashcards")
+}
+
+// Study session tracking
+model StudySession {
+  id          String   @id @default(cuid())
+  userId      String
+  startTime   DateTime @default(now())
+  endTime     DateTime?
+  cardsStudied Int     @default(0)
+  correctAnswers Int   @default(0)
+  totalQuestions Int   @default(0)
+  sessionType String   // "flashcards", "quiz", "review"
+  createdAt   DateTime @default(now())
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("study_sessions")
+}
+
+// Quiz attempts and results
+model QuizAttempt {
+  id          String   @id @default(cuid())
+  userId      String
+  quizType    String   // "vocabulary", "grammar", "translation"
+  score       Int      // Score out of total questions
+  totalQuestions Int
+  timeSpent   Int?     // Time in seconds
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("quiz_attempts")
+}
